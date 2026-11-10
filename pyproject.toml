@@ -1,0 +1,35 @@
+[project]
+
+name = "new-camera"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "iai-gxipy>=2.0.2412.9191",
+    "msgpack>=1.2.2",
+    "numpy>=2.5.1",
+    "opencv-python>=5.0.0.93",
+    "pyyaml>=6.0.3",
+    "pyzmq>=27.1.0",
+    "scipy>=1.18.1",
+    "shapely>=2.1.2",
+    "torch",
+    "torchvision",
+    "ultralytics>=8.4.131",
+    "yolo>=0.3.1",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+
+[tool.uv]
+environments = [
+    "sys_platform == 'win32'"
+]

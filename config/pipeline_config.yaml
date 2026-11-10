@@ -1,0 +1,353 @@
+# =============================================================================
+# pipeline_config.yaml
+#
+# Configuration générale du pipeline (hors config détaillée du bus ZMQ,
+# voir external_bus/robot_bus_config.py).
+#
+# Seule source de vérité pour les paramètres "infra" à modifier rapidement
+# sans toucher au code : tailles de buffers, format image, mode standalone,
+# contrainte mémoire, etc.
+#
+# Chargé par config/loader.py -> PipelineConfig (dataclass typée et validée).
+# =============================================================================
+
+version: 1
+
+# -----------------------------------------------------------------------------
+# Comportement général du pipeline
+# -----------------------------------------------------------------------------
+runtime:
+  standalone: true          # true = le pipeline tourne sans connexion au robot
+  target_fps: 30
+  log_level: "INFO"         # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  yellow_robot_height : 430 # mm, on peut demander à ajouter une balise pour surélever le tag p_aruco. Il faut donc savoir la hauteur du tag des 2 robots
+  blue_robot_height : 430   # mm, on peut demander à ajouter une balise pour surélever le tag p_aruco. Il faut donc savoir la hauteur du tag des 2 robots
+
+
+# -----------------------------------------------------------------------------
+# Caméra / format de la frame brute
+# -----------------------------------------------------------------------------
+camera:
+  width: 2448
+  height: 2048
+  channels: 3
+  dtype: "uint8"            # uint8 | uint16 | float32 | float64
+  color_order: "BGR"        # BGR (défaut OpenCV) | RGB
+  device_id: 0
+  video_name_simulation : "records/demo_eurobot_presentation.avi"
+  is_camera_used : false
+
+# -----------------------------------------------------------------------------
+# Calibration
+# -----------------------------------------------------------------------------
+calibration :
+    number_frame : 100
+    number_try_to_calib : 200
+    calibration_distorsion_file : "config/parametres_calibration.npz"
+    output_path : "tempo_file"
+
+
+# -----------------------------------------------------------------------------
+# Ring buffers — un seul buffer physique par flux (cf core/ring_buffer.py),
+# plusieurs patterns de lecture possibles dessus (LIFO analyse / FIFO
+# enregistrement).
+#
+# Layout d'un slot = [header][payload]
+#   header  : frame_id + timestamp_ns, layout partagé par tous les buffers
+#             (voir convention non négociable de propagation frame_id/ts)
+#   payload : données spécifiques au flux
+# -----------------------------------------------------------------------------
+ring_buffer:
+  header:
+    frame_id_dtype: "int64"      # 8 octets
+    timestamp_dtype: "int64"     # 8 octets (timestamp_ns)
+
+  streams:
+    camera:
+      n_slots: 8
+      shm_name: "rb_camera"
+      payload_bytes: null        # null => déduit de camera.width*height*channels*dtype
+
+    frame_redresse:
+      n_slots: 8
+      shm_name: "rb_redressee"
+      payload_bytes: null        # null => déduit de camera.width*height*channels*dtype
+
+
+    kf_output:
+      n_slots: 16
+      shm_name: "rb_kf_output"
+      payload_bytes: 128
+
+    zone_state:
+      n_slots: 16
+      shm_name: "rb_zone_state"
+      payload_bytes: 18         # A adapter au nombre de zonee stockée (18), et donc 1 octet par zone (parce que numpy stocke des valeurs binaires sur 1 octet).
+
+# -----------------------------------------------------------------------------
+# Contrainte mémoire cible (machine cible basse, pas la machine de dev 32 Go)
+# -----------------------------------------------------------------------------
+memory:
+  max_ram_gb: 16
+  warn_threshold_ratio: 0.8   # warning si les ring buffers seuls dépassent 80% du budget
+
+# -----------------------------------------------------------------------------
+# Chemins
+# -----------------------------------------------------------------------------
+paths:
+  models_dir: "models/"
+  logs_dir: "logs/"
+
+# -----------------------------------------------------------------------------
+# Bus robot externe (tcp://) — juste l'interrupteur ici.
+# Le détail (adresses, topics, timeouts...) vit dans
+# external_bus/robot_bus_config.py, activable/désactivable via ce flag.
+# -----------------------------------------------------------------------------
+external_bus:
+  enabled: True
+  ROBOT_BUS_IP : "127.0.0.1"     # 192.168.2.6 (TIC) / 192.168.2.8 (TAC) en prod
+  # 127.0.0.1 pour tester avec simulate_robot_receiver.py en local
+  ROBOT_BUS_PORT : 5570
+  ROBOT_BUS_TOPIC : "camera.status"
+  ROBOT_BUS_SNDHWM : 5           # ne garder que les N derniers messages non consommés (pas de queue qui grossit)
+  ROBOT_BUS_LINGER_MS : 0        # ne jamais bloquer à la fermeture du socket
+
+
+
+# -----------------------------------------------------------------------------
+# Zone d'intérêt définition
+# -----------------------------------------------------------------------------
+
+zones:
+  - id: 4
+    name: "Depot Y1"
+    type: "depot"
+    corners:
+      - [600.0, 0.0, 0.0]
+      - [600.0, 200.0, 0.0]
+      - [800.0, 200.0, 0.0]
+      - [800.0, 0.0, 0.0]
+  - id: 8
+    name: "Depot M1"
+    type: "depot"
+    corners:
+      - [1400.0, 0.0, 0.0]
+      - [1400.0, 200.0, 0.0]
+      - [1600.0, 200.0, 0.0]
+      - [1600.0, 0.0, 0.0]
+  - id: 14
+    name: "Depot B1"
+    type: "depot"
+    corners:
+      - [2200.0, 0.0, 0.0]
+      - [2200.0, 200.0, 0.0]
+      - [2400.0, 200.0, 0.0]
+      - [2400.0, 0.0, 0.0]
+  - id: 5
+    name: "Depot Y2"
+    type: "depot"
+    corners:
+      - [0.0, 700.0, 0.0]
+      - [0.0, 900.0, 0.0]
+      - [200.0, 900.0, 0.0]
+      - [200.0, 700.0, 0.0]
+  - id: 6
+    name: "Depot Y3"
+    type: "depot"
+    corners:
+      - [700.0, 700.0, 0.0]
+      - [700.0, 900.0, 0.0]
+      - [900.0, 900.0, 0.0]
+      - [900.0, 700.0, 0.0]
+  - id: 9
+    name: "Depot M2"
+    type: "depot"
+    corners:
+      - [1400.0, 700.0, 0.0]
+      - [1400.0, 900.0, 0.0]
+      - [1600.0, 900.0, 0.0]
+      - [1600.0, 700.0, 0.0]
+  - id: 16
+    name: "Depot B3"
+    type: "depot"
+    corners:
+      - [2100.0, 700.0, 0.0]
+      - [2100.0, 900.0, 0.0]
+      - [2300.0, 900.0, 0.0]
+      - [2300.0, 700.0, 0.0]
+  - id: 15
+    name: "Depot B2"
+    type: "depot"
+    corners:
+      - [2800.0, 700.0, 0.0]
+      - [2800.0, 900.0, 0.0]
+      - [3000.0, 900.0, 0.0]
+      - [3000.0, 700.0, 0.0]
+  - id: 7
+    name: "Depot Y4"
+    type: "depot"
+    corners:
+      - [1150.0, 1350.0, 0.0]
+      - [1150.0, 1550.0, 0.0]
+      - [1350.0, 1550.0, 0.0]
+      - [1350.0, 1350.0, 0.0]
+  - id: 17
+    name: "Depot B4"
+    type: "depot"
+    corners:
+      - [1650.0, 1350.0, 0.0]
+      - [1650.0, 1550.0, 0.0]
+      - [1850.0, 1550.0, 0.0]
+      - [1850.0, 1350.0, 0.0]
+  - id: 0
+    name: "Ramassage Y1"
+    type: "ramassage"
+    corners:
+      - [1000.0, 100.0, 0.0]
+      - [1000.0, 250.0, 0.0]
+      - [1200.0, 250.0, 0.0]
+      - [1200.0, 100.0, 0.0]
+  - id: 10
+    name: "Ramassage B1"
+    type: "ramassage"
+    corners:
+      - [1800.0, 100.0, 0.0]
+      - [1800.0, 250.0, 0.0]
+      - [2000.0, 250.0, 0.0]
+      - [2000.0, 100.0, 0.0]
+  - id: 1
+    name: "Ramassage Y2"
+    type: "ramassage"
+    corners:
+      - [100.0, 300.0, 0.0]
+      - [100.0, 500.0, 0.0]
+      - [250.0, 500.0, 0.0]
+      - [250.0, 300.0, 0.0]
+  - id: 11
+    name: "Ramassage B2"
+    type: "ramassage"
+    corners:
+      - [2750.0, 300.0, 0.0]
+      - [2750.0, 500.0, 0.0]
+      - [2900.0, 500.0, 0.0]
+      - [2900.0, 300.0, 0.0]
+  - id: 2
+    name: "Ramassage Y3"
+    type: "ramassage"
+    corners:
+      - [1050.0, 725.0, 0.0]
+      - [1050.0, 875.0, 0.0]
+      - [1250.0, 875.0, 0.0]
+      - [1250.0, 725.0, 0.0]
+  - id: 12
+    name: "Ramassage B3"
+    type: "ramassage"
+    corners:
+      - [1750.0, 725.0, 0.0]
+      - [1750.0, 875.0, 0.0]
+      - [1950.0, 875.0, 0.0]
+      - [1950.0, 725.0, 0.0]
+  - id: 3
+    name: "Ramassage Y4"
+    type: "ramassage"
+    corners:
+      - [100.0, 1100.0, 0.0]
+      - [100.0, 1300.0, 0.0]
+      - [250.0, 1300.0, 0.0]
+      - [250.0, 1100.0, 0.0]
+  - id: 13
+    name: "Ramassage B4"
+    type: "ramassage"
+    corners:
+      - [2750.0, 1100.0, 0.0]
+      - [2750.0, 1300.0, 0.0]
+      - [2900.0, 1300.0, 0.0]
+      - [2900.0, 1100.0, 0.0]
+
+
+# -----------------------------------------------------------------------------
+# Définition table homographie
+# -----------------------------------------------------------------------------
+table :
+  width : 3000                  # mm
+  height : 2000                 # mm
+  security_margin : 100         # mm
+  ratio_mm_per_pixel : 2        # La distance entre 2 pixel = 2 mm (donc la table "pixel" = 1500x1000 (en négligeant la security margin))
+
+
+
+# -----------------------------------------------------------------------------
+# Définition sous-zones
+# -----------------------------------------------------------------------------
+subframe :
+  - name: "Dessus"
+    corners:
+      - [1000.0, 1250.0, 0.0]
+      - [1000.0, 1600.0, 0.0]
+      - [2000.0, 1600.0, 0.0]
+      - [2000.0, 1250.0, 0.0]
+
+  - name: "Milieu"
+    corners:
+      - [ 500.0, 600.0, 0.0 ]
+      - [ 500.0, 1000.0, 0.0 ]
+      - [ 2500.0, 1000.0, 0.0 ]
+      - [ 2500.0, 600.0, 0.0 ]
+  - name: "Dessous"
+    corners:
+      - [ 500.0, -50.0, 0.0 ]
+      - [ 500.0, 350.0, 0.0 ]
+      - [ 2500.0, 350.0, 0.0 ]
+      - [ 2500.0, -50.0, 0.0 ]
+
+  - name: "Gauche"
+    corners:
+      - [ -100.0, 100.0, 0.0 ]
+      - [ -100.0, 1300.0, 0.0 ]
+      - [ 300.0, 1300.0, 0.0 ]
+      - [ 300.0, 100.0, 0.0 ]
+  - name: "Droite"
+    corners:
+      - [ 2600.0, 100.0, 0.0 ]
+      - [ 2600.0, 1300.0, 0.0 ]
+      - [ 3300.0, 1300.0, 0.0 ]
+      - [ 3300.0, 100.0, 0.0 ]
+
+
+# -----------------------------------------------------------------------------
+# YOLO config
+# -----------------------------------------------------------------------------
+YOLO:
+  models: "models/260219_homographieV1.pt"
+  confiance : 0.7
+  target_class : ["blue", "yellow", "slice","tower","black"]
+  object_height : 10
+
+
+# -----------------------------------------------------------------------------
+# Kalman config
+# -----------------------------------------------------------------------------
+Kalman :
+  initial_confidence :
+    - [ 50, 0.0, 0.0 ]
+    - [ 0.0, 50.0, 0.0 ]
+    - [ 0.0, 0.0, 50.0 ]
+  covariance_model :
+    - [ 0.5, 0.0, 0.0 ]
+    - [ 0.0, 0.5, 0.0 ]
+    - [ 0.0, 0.0, 0.5 ]
+  covariance_mesurement:
+    - [ 50, 0.0, 0.0 ]
+    - [ 0.0, 50.0, 0.0 ]
+    - [ 0.0, 0.0, 50.0 ]
+  threshold_nohits : 10
+  threshold_fusion : 3
+  distance : 10
+
+# -----------------------------------------------------------------------------
+# Jenga Configuration
+# -----------------------------------------------------------------------------
+Jenga :
+  height : 30
+  length : 150
+  width : 50

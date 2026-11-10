@@ -1,6 +1,6 @@
 
 
-## Système de Vision Caméra (Année 2025-2026 MONS SNOW)
+## Système de Vision Caméra (Année 2026-2027 ???)
 Ce projet est le module de vision par ordinateur du robot, conçu autour d'une architecture Python multiprocessus hautement concurrente. Il acquiert les flux vidéo en temps réel, fusionne les détections d'objets (YOLO / ArUco) via un filtre de Kalman, et publie les données spatiales vers la machine d'état principale.
 
 ## Installation et Dépendances
